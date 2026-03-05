@@ -160,13 +160,12 @@ All exported from `__init__.py`:
 ## Publishing & Releases
 
 **Automated PyPI Deployment** (`.github/workflows/publish.yml`):
-- Triggered automatically when `version` in `pyproject.toml` changes on `main` branch
+- Triggered automatically when a **git tag** starting with `v` is pushed
 - Uses modern **Trusted Publishing** (no API tokens needed!)
 - Workflow steps:
-  1. Detects version change in `pyproject.toml`
-  2. Builds distribution with `python -m build`
-  3. Publishes to PyPI using [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish)
-  4. Creates GitHub Release tagged as `v{version}` with commit changelog
+  1. Builds distribution with `python -m build`
+  2. Publishes to PyPI using [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish)
+  3. Creates GitHub Release with all commits since previous version tag
 
 **Setup (One-time):**
 1. Go to https://pypi.org/manage/account/publishing/
@@ -183,15 +182,19 @@ All exported from `__init__.py`:
 **To publish a new version:**
 1. Update `version = "x.y.z"` in `pyproject.toml`
 2. Commit: `git commit -m "Release x.y.z"`
-3. Push to main: `git push origin main`
+3. Create and push git tag:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
 4. Workflow automatically:
-   - Detects version change
    - Builds wheel and sdist
    - Publishes to PyPI (no secrets needed!)
    - Creates GitHub Release with commit history
 
 **Why Trusted Publishing?**
 - ✅ No API tokens to store
-- ✅ Tokens expire automatically
+- ✅ Tokens expire automatically per-workflow
 - ✅ Each project has isolated credentials
 - ✅ More secure than long-lived API tokens
+- ✅ Follows official Python Packaging best practices
