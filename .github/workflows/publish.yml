@@ -1,0 +1,155 @@
+name: Publish Python 🐍 distribution 📦 to PyPI and GitHub Releases
+
+on:
+  push:
+    paths:
+      - pyproject.toml
+    branches:
+      - main
+
+jobs:
+  check-version-change:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.version-changed }}
+      current-version: ${{ steps.check.outputs.current-version }}
+      previous-version: ${{ steps.check.outputs.previous-version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get current version
+        id: current
+        run: |
+          version=$(grep '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: Get previous version from HEAD~1
+        id: previous
+        run: |
+          previous_version=$(git show HEAD~1:pyproject.toml 2>/dev/null | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/' || echo "")
+          echo "version=${previous_version}" >> $GITHUB_OUTPUT
+
+      - name: Check if version changed
+        id: check
+        run: |
+          current_version="${{ steps.current.outputs.version }}"
+          previous_version="${{ steps.previous.outputs.version }}"
+          
+          if [ -z "$previous_version" ] || [ "$current_version" != "$previous_version" ]; then
+            echo "version-changed=true" >> $GITHUB_OUTPUT
+            echo "current-version=${current_version}" >> $GITHUB_OUTPUT
+            echo "previous-version=${previous_version}" >> $GITHUB_OUTPUT
+            echo "✓ Version changed: ${previous_version:-initial} → ${current_version}"
+          else
+            echo "version-changed=false" >> $GITHUB_OUTPUT
+            echo "✗ Version unchanged: ${current_version}"
+          fi
+
+  build:
+    name: Build distribution 📦
+    needs: check-version-change
+    if: needs.check-version-change.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pypa/build
+        run: python -m pip install build --user
+
+      - name: Build a binary wheel and a source tarball
+        run: python -m build
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-to-pypi:
+    name: Publish distribution 📦 to PyPI
+    needs:
+      - build
+      - check-version-change
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/sysdtime-py
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-github-release:
+    name: Create GitHub Release
+    needs:
+      - publish-to-pypi
+      - check-version-change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          CURRENT_VERSION: ${{ needs.check-version-change.outputs.current-version }}
+          PREVIOUS_VERSION: ${{ needs.check-version-change.outputs.previous-version }}
+        run: |
+          if [ -z "$PREVIOUS_VERSION" ]; then
+            # First release: all commits
+            commits=$(git log --pretty=format:"* %h - %s (%an)" | head -100)
+          else
+            # Get commits since previous version tag
+            previous_tag="v${PREVIOUS_VERSION}"
+            if git rev-parse "$previous_tag" >/dev/null 2>&1; then
+              commits=$(git log "${previous_tag}..HEAD" --pretty=format:"* %h - %s (%an)")
+            else
+              # If tag doesn't exist, show commits since HEAD~1
+              commits=$(git log HEAD~1..HEAD --pretty=format:"* %h - %s (%an)")
+            fi
+          fi
+          
+          # Write changelog
+          {
+            echo "## Commits"
+            echo ""
+            if [ -z "$commits" ]; then
+              echo "No new commits"
+            else
+              echo "$commits"
+            fi
+          } > changelog.txt
+          
+          cat changelog.txt
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.check-version-change.outputs.current-version }}
+          release_name: Release ${{ needs.check-version-change.outputs.current-version }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: false
+
+      - name: Clean up
+        run: rm -f changelog.txt
