@@ -1,4 +1,4 @@
-name: Publish Python 🐍 distribution 📦 to PyPI and GitHub Releases
+name: Publish Python distribution to PyPI and GitHub Releases
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build distribution 📦
+    name: Build distribution
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,7 @@ jobs:
           path: dist/
 
   publish-to-pypi:
-    name: Publish distribution �� to PyPI
+    name: Publish distribution to PyPI
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -47,7 +47,7 @@ jobs:
           name: python-package-distributions
           path: dist/
 
-      - name: Publish distribution 📦 to PyPI
+      - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         continue-on-error: true
 
@@ -70,10 +70,10 @@ jobs:
           # Get the tag from GitHub
           tag=${GITHUB_REF#refs/tags/}
           version=${tag#v}
-          
+
           # Get commits since previous tag
           previous_tag=$(git describe --tags --abbrev=0 ${tag}^ 2>/dev/null || echo "")
-          
+
           if [ -z "$previous_tag" ]; then
             # First release: all commits
             commits=$(git log --pretty=format:"* %h - %s (%an)" | head -100)
@@ -81,7 +81,7 @@ jobs:
             # Commits since previous tag
             commits=$(git log "${previous_tag}..${tag}" --pretty=format:"* %h - %s (%an)")
           fi
-          
+
           # Write changelog
           {
             echo "## Release ${version}"
@@ -94,7 +94,7 @@ jobs:
               echo "$commits"
             fi
           } > changelog.txt
-          
+
           cat changelog.txt
 
       - name: Create GitHub Release
