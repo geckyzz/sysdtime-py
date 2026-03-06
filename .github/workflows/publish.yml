@@ -49,11 +49,13 @@ jobs:
 
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        continue-on-error: true
 
   create-github-release:
     name: Create GitHub Release
     needs:
       - publish-to-pypi
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
